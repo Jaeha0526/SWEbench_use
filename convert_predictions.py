@@ -86,12 +86,10 @@ def write_predictions_json(predictions: List[Dict[str, Any]], output_file: str) 
         print(f"Error writing to output file: {str(e)}")
         sys.exit(1)
 
+
 def parse_arguments():
     """
-    Parses and validates command line arguments.
-    
-    Creates a user-friendly command-line interface that requires both input
-    and output file paths.
+    Parses and validates command line arguments using named parameters.
     
     Returns:
     --------
@@ -103,33 +101,38 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
+    # Changed to use named arguments with -- prefix
     parser.add_argument(
-        'input_file',
+        '--input_file',
+        required=True,
         help='Path to the input JSONL file containing predictions'
     )
     
     parser.add_argument(
-        'output_file',
+        '--output_file',
+        required=True,
         help='Path where the output JSON file should be saved'
     )
     
     return parser.parse_args()
 
+
 def main():
     """
     Main function that orchestrates the conversion process.
-    
-    This function ties together the argument parsing, reading, and writing
-    functions to create a complete conversion pipeline.
     """
     # Parse command line arguments
     args = parse_arguments()
+    
+    print(f"Starting conversion from {args.input_file} to {args.output_file}")
     
     # Process the JSONL file
     predictions = read_jsonl_predictions(args.input_file)
     
     # Write the results
     write_predictions_json(predictions, args.output_file)
+    
+    print("Conversion completed successfully")
 
 if __name__ == "__main__":
     main()
