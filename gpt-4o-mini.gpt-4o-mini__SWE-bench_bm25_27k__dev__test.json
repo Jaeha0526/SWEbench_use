@@ -2,18 +2,18 @@
     "total_instances": 225,
     "submitted_instances": 16,
     "completed_instances": 6,
-    "resolved_instances": 1,
-    "unresolved_instances": 5,
+    "resolved_instances": 0,
+    "unresolved_instances": 6,
     "empty_patch_instances": 0,
     "error_instances": 10,
     "unstopped_instances": 0,
     "completed_ids": [
-        "pvlib__pvlib-python-1048",
+        "pvlib__pvlib-python-1213",
+        "pvlib__pvlib-python-1368",
+        "sqlfluff__sqlfluff-1625",
         "sqlfluff__sqlfluff-2509",
-        "sqlfluff__sqlfluff-3066",
         "sqlfluff__sqlfluff-4084",
-        "sqlfluff__sqlfluff-4777",
-        "sqlfluff__sqlfluff-884"
+        "sqlfluff__sqlfluff-4777"
     ],
     "incomplete_ids": [
         "marshmallow-code__marshmallow-1164",
@@ -245,27 +245,26 @@
         "sqlfluff__sqlfluff-4777",
         "sqlfluff__sqlfluff-884"
     ],
-    "resolved_ids": [
-        "sqlfluff__sqlfluff-3066"
-    ],
+    "resolved_ids": [],
     "unresolved_ids": [
-        "pvlib__pvlib-python-1048",
+        "pvlib__pvlib-python-1213",
+        "pvlib__pvlib-python-1368",
+        "sqlfluff__sqlfluff-1625",
         "sqlfluff__sqlfluff-2509",
         "sqlfluff__sqlfluff-4084",
-        "sqlfluff__sqlfluff-4777",
-        "sqlfluff__sqlfluff-884"
+        "sqlfluff__sqlfluff-4777"
     ],
     "error_ids": [
         "marshmallow-code__marshmallow-2123",
         "pvlib__pvlib-python-1026",
+        "pvlib__pvlib-python-1048",
         "pvlib__pvlib-python-1176",
-        "pvlib__pvlib-python-1213",
-        "pvlib__pvlib-python-1368",
         "pvlib__pvlib-python-1738",
-        "sqlfluff__sqlfluff-1625",
+        "sqlfluff__sqlfluff-3066",
         "sqlfluff__sqlfluff-3662",
         "sqlfluff__sqlfluff-3904",
-        "sqlfluff__sqlfluff-4764"
+        "sqlfluff__sqlfluff-4764",
+        "sqlfluff__sqlfluff-884"
     ],
     "unstopped_containers": [],
     "unremoved_images": [],
