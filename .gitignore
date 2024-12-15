@@ -164,7 +164,7 @@ cython_debug/
 .api_key
 .keys
 .vscode/
-*.jsonl
+# *.jsonl
 *.jsonl.*
 *.patch
 *.DS_Store
