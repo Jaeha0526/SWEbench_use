@@ -42,6 +42,7 @@ MODEL_LIMITS = {
     "gpt-4-0613": 8_192,
     "gpt-4-1106-preview": 128_000,
     "gpt-4-0125-preview": 128_000,
+    "gpt-4o-mini" : 100_000,
 }
 
 # The cost per token for each model input.
@@ -61,6 +62,7 @@ MODEL_COST_PER_INPUT = {
     "gpt-4-32k": 0.00006,
     "gpt-4-1106-preview": 0.00001,
     "gpt-4-0125-preview": 0.00001,
+    "gpt-4o-mini-2024-07-18":0.00000015,
 }
 
 # The cost per token for each model output.
@@ -80,6 +82,7 @@ MODEL_COST_PER_OUTPUT = {
     "gpt-4-32k": 0.00012,
     "gpt-4-1106-preview": 0.00003,
     "gpt-4-0125-preview": 0.00003,
+    "gpt-4o-mini-2024-07-18":0.00000060,
 }
 
 # used for azure
@@ -87,6 +90,7 @@ ENGINES = {
     "gpt-3.5-turbo-16k-0613": "gpt-35-turbo-16k",
     "gpt-4-0613": "gpt-4",
     "gpt-4-32k-0613": "gpt-4-32k",
+    "gpt-4o-mini": "gpt-4o-mini",
 }
 
 
@@ -448,7 +452,18 @@ def main(
     output_dir,
     model_args,
     max_cost,
+    my_set,
 ):
+    if my_set in ["test","train"]:
+        shard_id = None
+        num_shards = None
+        
+        if my_set == "test":
+            indices = [0,6,12,18,24,30,36,42,48,54,60,66,72,78,84,90]
+        else :
+            indices = [96,102,108,114,120,126,132,138,144,150,156,162,168,174,180,186]
+            
+        
     if shard_id is None and num_shards is not None:
         logger.warning(
             f"Received num_shards={num_shards} but shard_id is None, ignoring"
@@ -462,6 +477,8 @@ def main(
     else:
         model_nickname = Path(model_name_or_path).name
     output_file = f"{model_nickname}__{dataset_name_or_path.split('/')[-1]}__{split}"
+    if my_set in ["test","train"]:
+        output_file += f"__{my_set}"
     if shard_id is not None and num_shards is not None:
         output_file += f"__shard-{shard_id}__num_shards-{num_shards}"
     output_file = Path(output_dir, output_file + ".jsonl")
@@ -481,16 +498,25 @@ def main(
     if not split in dataset:
         raise ValueError(f"Invalid split {split} for dataset {dataset_name_or_path}")
     dataset = dataset[split]
-    lens = np.array(list(map(len, dataset["text"])))
-    dataset = dataset.select(np.argsort(lens))
+    
+    logger.info(f"type of dataset : {type(dataset)}")
+    
+    if my_set in ["test","train"]:
+        dataset = dataset.select(indices)
+        logger.info(f"{my_set} set is chosen")
+    else:
+        lens = np.array(list(map(len, dataset["text"])))
+        dataset = dataset.select(np.argsort(lens))
+        if shard_id is not None and num_shards is not None:
+            dataset = dataset.shard(num_shards, shard_id, contiguous=True)
+            
     if len(existing_ids) > 0:
         dataset = dataset.filter(
             lambda x: x["instance_id"] not in existing_ids,
             desc="Filtering out existing ids",
             load_from_cache_file=False,
         )
-    if shard_id is not None and num_shards is not None:
-        dataset = dataset.shard(num_shards, shard_id, contiguous=True)
+    
     inference_args = {
         "test_dataset": dataset,
         "model_name_or_path": model_name_or_path,
@@ -558,6 +584,12 @@ if __name__ == "__main__":
         type=float,
         default=None,
         help="Maximum cost to spend on inference.",
+    )
+    parser.add_argument(
+        "--my_set",
+        type=str,
+        default=None,
+        help="which data I would choose",
     )
     args = parser.parse_args()
     main(**vars(args))
