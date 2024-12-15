@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/jaeha/SWE-bench/swebench-env"
+VIRTUAL_ENV="/Users/jaeha/Toolformer_project/SWE-bench/swebench-env"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
