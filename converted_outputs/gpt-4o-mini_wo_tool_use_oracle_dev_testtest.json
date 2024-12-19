@@ -1,0 +1,12 @@
+[
+  {
+    "instance_id": "sqlfluff__sqlfluff-2862",
+    "model_patch": "\n--- a/test.template.sql\n+++ b/test.template.sql\n@@ -1,4 +1,4 @@\n {% if true %}\n SELECT 1 + 1\n-{%- endif %}\n+{%- endif %}\n \n",
+    "model_name_or_path": "gpt-4o-mini"
+  },
+  {
+    "instance_id": "sqlfluff__sqlfluff-4151",
+    "model_patch": "--- a/src/sqlfluff/cli/commands.py\n+++ b/src/sqlfluff/cli/commands.py\n@@ -500,7 +500,7 @@\n     \"--disable_progress_bar\",\n     \"--disable-progress-bar\",\n     is_flag=True,\n     help=\"Disables progress bars.\",\n-    cls=DeprecatedOption,\n+    cls=click.Option,\n     deprecated=[\"--disable_progress_bar\"],\n )\n",
+    "model_name_or_path": "gpt-4o-mini"
+  }
+]
