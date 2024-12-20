@@ -175,6 +175,41 @@ class ToolformerHandler:
 
 
 @retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(3))
+def make_openai_call(model_name_or_path, messages, use_azure, temperature, top_p, max_tokens=None, **model_args):
+    """Makes the actual API call to OpenAI with retry logic."""
+    try:
+        # Create a new dict for API arguments to avoid modifying the input
+        api_args = {
+            'frequency_penalty': 0.8,
+            'temperature': temperature,
+            'top_p': top_p,
+            'max_tokens': max_tokens
+        }
+        
+        # Add any additional args that aren't already set
+        for key, value in model_args.items():
+            if key not in api_args :
+                api_args[key] = value
+                
+        if use_azure:
+            return openai.chat.completions.create(
+                engine=ENGINES[model_name_or_path],
+                messages=messages,
+                **api_args
+            )
+        else:
+            return openai.chat.completions.create(
+                model=model_name_or_path,
+                messages=messages,
+                **api_args
+            )
+    except openai.BadRequestError as e:
+        if e.code == "context_length_exceeded":
+            print("Context length exceeded")
+            return None
+        raise e
+
+
 def call_chat(model_name_or_path, inputs, use_azure, temperature, top_p, toolformer=False, handler=None, **model_args):
     """
     Calls the openai API to generate completions for the given inputs.
@@ -195,7 +230,7 @@ def call_chat(model_name_or_path, inputs, use_azure, temperature, top_p, toolfor
     instruction_msg ="""
         A code snippet with issues has been provided in the previous context.
         The issue is specified between <issue> and </issue> tags.
-        Please follow these steps in order:
+        PLEASE FOLLOW THESE STEPS IN ORDER :
 
         1. First, repeat the issue message that was between <issue> and </issue> tags
         
@@ -231,34 +266,24 @@ def call_chat(model_name_or_path, inputs, use_azure, temperature, top_p, toolfor
             
             Important: The diff section should only contain diff syntax and code changes, without any explanatory text.
             Your response should follow this sequence: issue restatement → code snippet → diff.
-            Once the diff section begins, do not add any additional commentary or tool calls.
+            Once the diff section begins, do NOT add any additional commentary or tool calls.
         """
     
     # Add instruction message at the end of the input.
     user_message = user_message + instruction_msg
     print("Instruction added to the end of the input.")
     
+    # Create messages for API call
+    messages = [
+        {"role": "system", "content": system_messages},
+        {"role": "user", "content": user_message}
+    ]
     
     try:
-        # Create messages for API call
-        messages = [
-            {"role": "system", "content": system_messages},
-            {"role": "user", "content": user_message}
-        ]
-        
-        # Set up API parameters
-        api_params = {
-            "messages": messages,
-            "frequency_penalty" : 0.8,
-            "temperature": temperature,
-            "top_p": top_p,
-            "stream": toolformer,  # Enable streaming if toolformer is True
-            **model_args
-        }
-        
         # Make API call with tool handling if toolformer is enabled
         if toolformer:
-            response, cost = call_chat_with_tool(
+            model_args['stream'] = True
+            return call_chat_with_tool(
                 model_name_or_path,
                 messages,
                 use_azure,
@@ -269,21 +294,21 @@ def call_chat(model_name_or_path, inputs, use_azure, temperature, top_p, toolfor
             )
             
         else:
-            # Regular API call without tool handling
-            if use_azure:
-                api_params["engine"] = ENGINES[model_name_or_path]
-                response = openai.chat.completions.create(**api_params)
-            else:
-                api_params["model"] = model_name_or_path
-                response = openai.chat.completions.create(**api_params)
-            
-            # Return response and cost    
+            model_args['stream'] = False
+            # Regular API call without tool processing
+            response = make_openai_call(
+                model_name_or_path,
+                messages,
+                use_azure,
+                temperature,
+                top_p,
+                **model_args
+            )
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
             cost = calc_cost(response.model, input_tokens, output_tokens)
-        
-        return response, cost
-    
+            return response, cost
+            
     except openai.BadRequestError as e:
         if e.code == "context_length_exceeded":
             print("Context length exceeded")
@@ -298,188 +323,129 @@ def call_chat_with_tool(model_name_or_path, messages, use_azure, temperature, to
     print("-"*100+"\n")
     print("new call chat with tool")
     print("-"*100+"\n")
-    try:
-        total_input_tokens = 0
-        total_output_tokens = 0
-        full_response = ""
-        max_tokens = MODEL_LIMITS[model_name_or_path]  # Get model's token limit
-        max_iterations = 5  # Prevent infinite loops
-        iteration_count = 0
-        tokens_since_last_tool_call = 0
-        min_tokens_before_tool_call = 500
-        done = False
-        
-        while iteration_count < max_iterations:  
-            iteration_count += 1
-            print(f"\nIteration {iteration_count}/{max_iterations}")
-            print(f"Last few messages : .....{messages[-1]['content'][-300:]}\n")
-            print(f"start again... \n")
-            
-            # Check total tokens
-            if total_output_tokens >= max_tokens * 0.8:  # 80% of model's limit
-                print(f"Warning: Approaching token limit ({total_output_tokens}/{max_tokens}). Stopping early.")
-                break
-            
-            # Make streaming API call
-            if use_azure:
-                response_stream = openai.chat.completions.create(
-                    engine=ENGINES[model_name_or_path],
-                    messages=messages,
-                    frequency_penalty=0.8,  # Penalize repeated phrases
-                    temperature=temperature,
-                    top_p=top_p,
-                    stream=True,
-                    max_tokens=max_tokens - total_output_tokens,  # Remaining tokens
-                    **model_args
-                )
-            else:
-                response_stream = openai.chat.completions.create(
-                    model=model_name_or_path,
-                    messages=messages,
-                    frequency_penalty=0.8,  # Penalize repeated phrases
-                    temperature=temperature,
-                    top_p=top_p,
-                    stream=True,
-                    max_tokens=max_tokens - total_output_tokens,  # Remaining tokens
-                    **model_args
-                )
 
-            current_chunk = ""
-            tool_call_detected = False
-            
-            # Process the stream
-            for chunk in response_stream:
-                if chunk.choices[0].delta.content:
-                    chunk_text = chunk.choices[0].delta.content
-                    current_chunk += chunk_text
-                    tokens_since_last_tool_call += len(chunk_text.split())
-                    print(chunk_text, end='', flush=True)  # Show output in real-time
-                    
-                    # Check for tool call only if enough tokens have been processed
-                    if tokens_since_last_tool_call >= min_tokens_before_tool_call and "<TOOLFORMER_API_START>" in current_chunk:
-                        # Wait for full tool call pattern before proceeding
-                        complete_pattern = re.search(r'<TOOLFORMER_API_START>\s*LLMChain\((.*?)\)\s*<TOOLFORMER_API_RESPONSE>', current_chunk)
-                        if complete_pattern:
-                            tool_call_detected = True
-                            break
-                        
-            if tool_call_detected:
-                # Extract the question
-                question_match = re.search(r'<TOOLFORMER_API_START>\s*LLMChain\((.*?)\)\s*<TOOLFORMER_API_RESPONSE>', current_chunk)
-                if question_match:
-                    question = question_match.group(1)
-                    print(f"\nProcessing tool call: {question}")
-                    
-                    # Get tool response
-                    tool_response = handler.langchain_llmchain(question)
-                    print(f"Tool response: {tool_response}")
-                    
-                    # Format the interaction
-                    tool_interaction = f"<TOOLFORMER_API_START> LLMChain({question}) <TOOLFORMER_API_RESPONSE>{tool_response}<TOOLFORMER_API_END>"
-                    
-                    # Update messages, preserving context
-                    full_response += current_chunk[:question_match.start()] + tool_interaction
-                    messages = [
-                        *messages[:2],  # Keep original system and user messages
-                        {"role": "assistant", "content": full_response},
-                        {"role": "user", "content": """
-                         Apologies, the previous output was interrupted.
-                        Please continue from where you left off and complete the response.
-                        Please DO NOT use API call for a while.
-                        """}
-                    ]
-                    
-                    # Reset token counter
-                    tokens_since_last_tool_call = 0
-                    
-                    continue  # Continue to next iteration with updated messages
-            else:
-                # No tool call detected, we're done
-                full_response += current_chunk
-                done = True
-                break
-        
-        if not done:
-            print("All the iterations were used. Let's complete the output with streaming.")
-
-            while True:
-                print("finishing output..")
-                # Make a new API call to continue generation
-                if use_azure:
-                    next_response_stream = openai.ChatCompletion.create(
-                        engine=ENGINES[model_name_or_path],
-                        messages=messages,  # Current context
-                        frequency_penalty=0.8,  # Penalize repeated phrases
-                        temperature=temperature,  # Same generation parameters
-                        top_p=top_p,
-                        stream=True,  # Enable streaming
-                        max_tokens=max_tokens - total_output_tokens,  # Remaining tokens
-                        **model_args
-                    )
-                else:
-                    next_response_stream = openai.ChatCompletion.create(
-                        model=model_name_or_path,
-                        messages=messages,  # Current context
-                        frequency_penalty=0.8,  # Penalize repeated phrases
-                        temperature=temperature,  # Same generation parameters
-                        top_p=top_p,
-                        stream=True,  # Enable streaming
-                        max_tokens=max_tokens - total_output_tokens,  # Remaining tokens
-                        **model_args
-                    )
-
-                current_chunk = ""
-                # Process the stream for continued generation
-                for chunk in next_response_stream:
-                    if chunk.choices[0].delta.get("content"):  # Check for content in the chunk
-                        chunk_text = chunk.choices[0].delta["content"]
-                        current_chunk += chunk_text
-                        full_response += chunk_text  # Accumulate the full response
-                        total_output_tokens += len(chunk_text.split())  # Update token count
-                        print(chunk_text, end='', flush=True)  # Real-time streaming output
-
-                # Update the messages with the assistant's latest response
-                messages.append({"role": "assistant", "content": current_chunk})
-                
-                # Check if the response is finished
-                if len(current_chunk) == 0 or total_output_tokens >= max_tokens:
-                    print("Streaming generation completed.")
-                    break
-
-        # print("final response generating.....")
-        # # Create final response object
-        # final_response = openai.types.chat.ChatCompletion(
-        #     id="chat-",  # OpenAI will assign an ID
-        #     choices=[openai.types.chat.ChatCompletionChoice(
-        #         finish_reason="stop",
-        #         index=0,
-        #         message=openai.types.chat.ChatCompletionMessage(
-        #             content=full_response,
-        #             role="assistant"
-        #         )
-        #     )],
-        #     model=model_name_or_path,
-        #     usage=openai.types.completion_usage.CompletionUsage(
-        #         completion_tokens=len(full_response),  # Approximate
-        #         prompt_tokens=len(str(messages)),      # Approximate
-        #         total_tokens=len(full_response) + len(str(messages))
-        #     )
-        # )
+    total_input_tokens = 0
+    total_output_tokens = 0
+    full_response = ""
+    max_tokens = MODEL_LIMITS[model_name_or_path]  # Get model's token limit
+    max_iterations = 10  # Prevent infinite loops
+    iteration_count = 0
+    tokens_since_last_tool_call = 0
+    min_tokens_before_tool_call = 300
+    done = False
     
-        # Calculate approximate cost
-        # cost = calc_cost(model_name_or_path, 
-        #                 final_response.usage.prompt_tokens,
-        #                 final_response.usage.completion_tokens)
-        # print(f"cost:{cost}")
-        cost = 0
+    while iteration_count < max_iterations:  
+        iteration_count += 1
+        print(f"\nIteration {iteration_count}/{max_iterations}")
+        print(f"Last few messages : .....{messages[-1]['content'][-300:]}\n")
+        print(f"start again... \n")
         
-        return full_response, cost
+        # Check total tokens
+        if total_output_tokens >= max_tokens * 0.8:  # 80% of model's limit
+            print(f"Warning: Approaching token limit ({total_output_tokens}/{max_tokens}). Stopping early.")
+            break
+        
+        # Make API call with retry
+        response_stream = make_openai_call(
+            model_name_or_path,
+            messages,
+            use_azure,
+            temperature,
+            top_p,
+            max_tokens=max_tokens - total_output_tokens,
+            **model_args
+        )
+        
+        if response_stream is None:
+            break
 
-    except openai.BadRequestError as e:
-        if e.code == "context_length_exceeded":
-            print("Context length exceeded")
-            return None
-        raise e
+        current_chunk = ""
+        tool_call_detected = False
+        
+        # Process the stream
+        for chunk in response_stream:
+            if chunk.choices[0].delta.content:
+                chunk_text = chunk.choices[0].delta.content
+                current_chunk += chunk_text
+                tokens_since_last_tool_call += len(chunk_text.split())
+                print(chunk_text, end='', flush=True)  # Show output in real-time
+                
+                # Check for tool call only if enough tokens have been processed
+                if tokens_since_last_tool_call >= min_tokens_before_tool_call and "<TOOLFORMER_API_START>" in current_chunk:
+                    # Wait for full tool call pattern before proceeding
+                    complete_pattern = re.search(r'<TOOLFORMER_API_START>\s*LLMChain\((.*?)\)\s*<TOOLFORMER_API_RESPONSE>', current_chunk)
+                    if complete_pattern:
+                        tool_call_detected = True
+                        break
+                    
+        if tool_call_detected:
+            # Extract the question
+            question_match = re.search(r'<TOOLFORMER_API_START>\s*LLMChain\((.*?)\)\s*<TOOLFORMER_API_RESPONSE>', current_chunk)
+            if question_match:
+                question = question_match.group(1)
+                print(f"\nProcessing tool call: {question}")
+                
+                # Get tool response
+                tool_response = handler.langchain_llmchain(question)
+                print(f"Tool response: {tool_response}")
+                
+                # Format the interaction
+                tool_interaction = f"<TOOLFORMER_API_START> LLMChain({question}) <TOOLFORMER_API_RESPONSE>{tool_response}<TOOLFORMER_API_END>"
+                
+                # Update messages, preserving context
+                full_response += current_chunk[:question_match.start()] + tool_interaction
+                messages = [
+                    *messages[:2],  # Keep original system and user messages
+                    {"role": "assistant", "content": full_response},
+                    {"role": "user", "content": """
+                        Apologies, the previous output was interrupted.
+                    Please continue from where you left off and complete the response.
+                    Please do NOT use API call for a while.
+                    Don't forget the original plan I gave you.
+                    """}
+                ]
+                
+                # Reset token counter
+                tokens_since_last_tool_call = 0
+                
+                continue  # Continue to next iteration with updated messages
+        else:
+            # No tool call detected, we're done
+            full_response += current_chunk
+            done = True
+            break
+    
+    if not done:
+        print("All iterations used. Completing output with streaming...")
+        final_messages = [
+            *messages[:2],
+            {"role": "assistant", "content": full_response},
+            {"role": "user", "content": """
+             Please complete the response WITHOUT using any more tools.
+             Don't forget the original plan I gave you.
+             """}
+        ]
+        
+        # Final completion without tool processing
+        final_stream = make_openai_call(
+            model_name_or_path,
+            final_messages,
+            use_azure,
+            temperature,
+            top_p,
+            max_tokens=max_tokens - total_output_tokens,
+            **model_args
+        )
+        
+        for chunk in final_stream:
+            if chunk.choices[0].delta.content:
+                chunk_text = chunk.choices[0].delta.content
+                full_response += chunk_text
+                total_output_tokens += len(chunk_text.split())
+                print(chunk_text, end='', flush=True)
+    
+    return full_response, calc_cost(model_name_or_path, total_input_tokens, total_output_tokens)
+
 
 
 def gpt_tokenize(string: str, encoding) -> int:
@@ -578,19 +544,22 @@ def openai_inference(
                     **model_args
                 )
                 
+                print("data gathered")
+                
                 if response is None:
                     continue
                 
                 # Get completion from response
-                completion = response.choices[0].message.content
+                if not toolformer :
+                    response = response.choices[0].message.content
                     
                 # Update costs and output
                 total_cost += cost
                 print(f"Total Cost: {total_cost:.2f}")
                 
                 # Save results
-                output_dict["full_output"] = completion
-                output_dict["model_patch"] = extract_diff(completion)
+                output_dict["full_output"] = response
+                output_dict["model_patch"] = extract_diff(response)
                 print(json.dumps(output_dict), file=f, flush=True)
                 
                 # Check cost limit

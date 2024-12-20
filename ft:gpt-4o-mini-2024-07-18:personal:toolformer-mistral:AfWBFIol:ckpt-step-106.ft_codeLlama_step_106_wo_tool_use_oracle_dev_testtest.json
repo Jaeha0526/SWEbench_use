@@ -1,11 +1,11 @@
 {
     "total_instances": 225,
-    "submitted_instances": 2,
+    "submitted_instances": 1,
     "completed_instances": 0,
     "resolved_instances": 0,
     "unresolved_instances": 0,
     "empty_patch_instances": 0,
-    "error_instances": 2,
+    "error_instances": 1,
     "unstopped_instances": 0,
     "completed_ids": [],
     "incomplete_ids": [
@@ -199,6 +199,7 @@
         "sqlfluff__sqlfluff-2641",
         "sqlfluff__sqlfluff-2846",
         "sqlfluff__sqlfluff-2849",
+        "sqlfluff__sqlfluff-2862",
         "sqlfluff__sqlfluff-2907",
         "sqlfluff__sqlfluff-2998",
         "sqlfluff__sqlfluff-3066",
@@ -235,13 +236,11 @@
     ],
     "empty_patch_ids": [],
     "submitted_ids": [
-        "sqlfluff__sqlfluff-2862",
         "sqlfluff__sqlfluff-4151"
     ],
     "resolved_ids": [],
     "unresolved_ids": [],
     "error_ids": [
-        "sqlfluff__sqlfluff-2862",
         "sqlfluff__sqlfluff-4151"
     ],
     "unstopped_containers": [],

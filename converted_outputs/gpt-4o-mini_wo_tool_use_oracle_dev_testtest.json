@@ -1,12 +1,12 @@
 [
   {
     "instance_id": "sqlfluff__sqlfluff-2862",
-    "model_patch": "\n--- a/test.template.sql\n+++ b/test.template.sql\n@@ -1,4 +1,4 @@\n {% if true %}\n SELECT 1 + 1\n-{%- endif %}\n+{%- endif %}\n \n",
+    "model_patch": "\n--- a/test.template.sql    \n+++ b/test.template.sql    \n@@ -2,5 +2,6 @@    \n SELECT 1 + 1    \n {%- endif %}    \n+   \n```  \n",
     "model_name_or_path": "gpt-4o-mini"
   },
   {
     "instance_id": "sqlfluff__sqlfluff-4151",
-    "model_patch": "--- a/src/sqlfluff/cli/commands.py\n+++ b/src/sqlfluff/cli/commands.py\n@@ -500,7 +500,7 @@\n     \"--disable_progress_bar\",\n     \"--disable-progress-bar\",\n     is_flag=True,\n     help=\"Disables progress bars.\",\n-    cls=DeprecatedOption,\n+    cls=click.Option,\n     deprecated=[\"--disable_progress_bar\"],\n )\n",
+    "model_patch": "\n--disable_progress_bar Flag Broken for Fix\n### Search before asking\n\n- [X] I searched the [issues](https://github.com/sqlfluff/sqlfluff/issues) and found no similar issues.\n\n\n### What Happened\n\nI ran `sqlfluff fix ${target} --dialect ansi --disable_progress_bar --force` on version 1.4.0 and got an error with exit code 2. Running with `--disable-progress-bar` appears to work fine, but it appears that compatibility with underscores was broken in version 1.4.0.\n\n### Expected Behaviour\n\nShould run as expected, with no error and no progress bar.\n\n### Observed Behaviour\n\nExit code 2 and stderr:\n```\nUsage: sqlfluff fix [OPTIONS] [PATHS]...\n        Try 'sqlfluff fix -h' for help.\n\n        Error: No such option: --disable_progress_bar (Possible options: --disable-noqa, --disable-progress-bar)\n```\n\n### How to reproduce\n\nSql file:\n```\nSELECT foo FROM bar;\n```\n\nCommand:\n```\nsqlfluff fix ${target} --dialect ansi --disable_progress_bar --force\n```\n\n### Dialect\n\nansi\n\n### Version\n\npython 3.10.3\nsqlfluff 1.4.0 and up appears to have this problem (tested through 1.4.2)\n\n### Configuration\n\nNo special configuration. Ran hermetically with `trunk`.\n\n### Are you willing to work on and submit a PR to address the issue?\n\n- [ ] Yes I am willing to submit a PR!\n\n### Code of Conduct\n\n- [X] I agree to follow this project's [Code of Conduct](https://github.com/sqlfluff/sqlfluff/blob/main/CODE_OF_CONDUCT.md)\n\n",
     "model_name_or_path": "gpt-4o-mini"
   }
 ]
